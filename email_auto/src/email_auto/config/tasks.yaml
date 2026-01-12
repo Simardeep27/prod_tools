@@ -1,0 +1,73 @@
+categorization_task:
+  description: >
+    First, read the fetched emails from the file at 'EMAIL_DRAIN/fetched_emails.json' using the `FileReadTool`.
+    
+    For each email, analyze the content and categorize as follows:
+
+    1. Category (choose one):
+       - JOB/INTERNSHIP
+       - UNIVERSITY
+       - PERSONAL
+       - PAYMENTS/TRANSACTIONS
+       - OTHER
+
+    2. Priority (choose one):
+      IMPORTANT - BE VERY STRICT WITH PRIORITY LEVELS:
+      - HIGH: ONLY for JOB/internship or University category OR any mail with a close deadline.
+      - MEDIUM: ONLY for important but not urgent communications from real people
+         - DO NOT mark promotional content, newsletters, or automated notifications as MEDIUM
+         - DO NOT mark Shutterfly or other promotional emails as MEDIUM - they should be LOW
+         - Only actual communication from real people can be MEDIUM
+      - LOW
+
+    3. Required Action (choose one):
+       - REPLY
+       - READ_ONLY
+       - TASK
+       - IGNORE
+
+    IMPORTANT JOB/INTERNSHIP EMAIL RULES:
+    - ANY email for a job and internship role MUST be a HIGH priority 
+    - If the content is based on an update regarding an application, make sure to look into the next steps
+    
+    IMPORTANT FORMAT INSTRUCTIONS:
+    Your final answer must be a valid JSON object with these exact fields(example without the quotes):
+      "email_id": "The email's unique identifier",
+      "subject": "The email's subject line",
+      "sender": "The email sender",
+      "category": "The category you assigned",
+      "priority": "The priority you assigned",
+      "required_action": "The action needed",
+      "date": "The email date in YYYY-MM-DD format",
+    
+    Do not include any explanations, thoughts, or additional text outside the JSON object.
+    Do not use markdown formatting or code blocks.
+    Just return the raw JSON object.
+  expected_output: >
+    A JSON object with email_id, subject, category, priority, and required_action fields.
+  agent: categorizer
+  output_file: output/categorization_report.json
+
+reporting_task:
+  description: >
+    First, read the categorization report from 'output/categorization_report.json' using the `FileReadTool`.
+
+    For each email, generate a short summary which based on the email content, sender information, category and provider information, 
+    provides a full summary of the email.
+
+    SUMMARY RULES:
+    1. For HIGH_PRIORITY EMAILS:
+      - Understand the urgent requirements/need/update mentioned in the email
+      - Summary should include the context of the job/internship/university updates
+      - Mention any timeline if present in the email
+    
+    Your final answer should be a simple list of emails you responded to, each starting with the sender information.
+
+  expected_output: >
+    A summary saved in the summaries folder for each email. Each summary should follow the 
+    specified structure and formatting guidelines. The should be in correct Markdown format without
+    any additional text or formatting such as "```" or "```md".
+  
+  context: [categorization_task]
+  agent: reporting_analyst
+  output_file: output/response_report.json
