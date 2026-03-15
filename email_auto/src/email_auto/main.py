@@ -1,94 +1,62 @@
-#!/usr/bin/env python
-import sys
-import warnings
+from __future__ import annotations
 
-from datetime import datetime
+import argparse
+from pathlib import Path
 
 from email_auto.crew import EmailAuto
 
-warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
-# This main file is intended to be a way for you to run your
-# crew locally, so refrain from adding unnecessary logic into this file.
-# Replace with inputs you want to test with, it will automatically
-# interpolate any tasks and agents information
-
-def run():
-    """
-    Run the crew.
-    """
-    inputs = {
-        'topic': 'AI LLMs',
-        'current_year': str(datetime.now().year)
-    }
-
-    try:
-        EmailAuto().crew().kickoff(inputs=inputs)
-    except Exception as e:
-        raise Exception(f"An error occurred while running the crew: {e}")
+DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_CONFIG_PATH = DEFAULT_PROJECT_ROOT / "src" / "email_auto" / "config" / "tasks.yaml"
 
 
-def train():
-    """
-    Train the crew for a given number of iterations.
-    """
-    inputs = {
-        "topic": "AI LLMs",
-        'current_year': str(datetime.now().year)
-    }
-    try:
-        EmailAuto().crew().train(n_iterations=int(sys.argv[1]), filename=sys.argv[2], inputs=inputs)
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="email_auto",
+        description="Fetch emails, classify them, and generate a local daily digest.",
+    )
+    subparsers = parser.add_subparsers(dest="command")
 
-    except Exception as e:
-        raise Exception(f"An error occurred while training the crew: {e}")
+    run_parser = subparsers.add_parser("run", help="Fetch recent emails and build the digest.")
+    run_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    run_parser.add_argument("--env-file", type=Path)
+    run_parser.add_argument("--limit", type=int)
+    run_parser.add_argument("--force", action="store_true")
 
-def replay():
-    """
-    Replay the crew execution from a specific task.
-    """
-    try:
-        EmailAuto().crew().replay(task_id=sys.argv[1])
+    launchd_parser = subparsers.add_parser(
+        "write-launchd",
+        help="Write a launchd plist using the schedule defined in tasks.yaml.",
+    )
+    launchd_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
+    launchd_parser.add_argument("--env-file", type=Path)
+    launchd_parser.add_argument("--output", type=Path)
+    launchd_parser.add_argument("--python-path", type=Path)
+    launchd_parser.add_argument("--working-dir", type=Path, default=DEFAULT_PROJECT_ROOT)
+    launchd_parser.add_argument("--label")
 
-    except Exception as e:
-        raise Exception(f"An error occurred while replaying the crew: {e}")
+    return parser
 
-def test():
-    """
-    Test the crew execution and returns the results.
-    """
-    inputs = {
-        "topic": "AI LLMs",
-        "current_year": str(datetime.now().year)
-    }
 
-    try:
-        EmailAuto().crew().test(n_iterations=int(sys.argv[1]), eval_llm=sys.argv[2], inputs=inputs)
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    command = args.command or "run"
+    service = EmailAuto(config_path=args.config, env_path=getattr(args, "env_file", None))
 
-    except Exception as e:
-        raise Exception(f"An error occurred while testing the crew: {e}")
+    if command == "write-launchd":
+        output_path = service.write_launchd_plist(
+            output_path=args.output,
+            python_path=args.python_path,
+            working_dir=args.working_dir,
+            label=args.label,
+        )
+        print(output_path)
+        return 0
 
-def run_with_trigger():
-    """
-    Run the crew with trigger payload.
-    """
-    import json
+    result = service.run_once(force=args.force, limit=args.limit)
+    print(f"Processed {result.processed_count} email(s). Summary: {result.summary_path}")
+    return 0
 
-    if len(sys.argv) < 2:
-        raise Exception("No trigger payload provided. Please provide JSON payload as argument.")
 
-    try:
-        trigger_payload = json.loads(sys.argv[1])
-    except json.JSONDecodeError:
-        raise Exception("Invalid JSON payload provided as argument")
-
-    inputs = {
-        "crewai_trigger_payload": trigger_payload,
-        "topic": "",
-        "current_year": ""
-    }
-
-    try:
-        result = EmailAuto().crew().kickoff(inputs=inputs)
-        return result
-    except Exception as e:
-        raise Exception(f"An error occurred while running the crew with trigger: {e}")
+if __name__ == "__main__":
+    raise SystemExit(main())

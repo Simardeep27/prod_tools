@@ -1,64 +1,58 @@
-from crewai import Agent, Crew, Process, Task
-from crewai.project import CrewBase, agent, crew, task
-from crewai.agents.agent_builder.base_agent import BaseAgent
-from typing import List
-# If you want to run a snippet of code before or after the crew starts,
-# you can use the @before_kickoff and @after_kickoff decorators
-# https://docs.crewai.com/concepts/crews#example-crew-class-with-decorators
+from __future__ import annotations
 
-@CrewBase
-class EmailAuto():
-    """EmailAuto crew"""
+from dataclasses import dataclass
+from pathlib import Path
 
-    agents: List[BaseAgent]
-    tasks: List[Task]
+from email_auto.config import default_env_path, load_app_config, load_dotenv
+from email_auto.email_client import load_email_credentials
+from email_auto.pipeline import EmailAutomationPipeline, RunArtifacts
+from email_auto.scheduler import write_launch_agent_plist
 
-    # Learn more about YAML configuration files here:
-    # Agents: https://docs.crewai.com/concepts/agents#yaml-configuration-recommended
-    # Tasks: https://docs.crewai.com/concepts/tasks#yaml-configuration-recommended
-    
-    # If you would like to add tools to your agents, you can learn more about it here:
-    # https://docs.crewai.com/concepts/agents#agent-tools
-    @agent
-    def researcher(self) -> Agent:
-        return Agent(
-            config=self.agents_config['researcher'], # type: ignore[index]
-            verbose=True
+
+DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_CONFIG_PATH = DEFAULT_PROJECT_ROOT / "src" / "email_auto" / "config" / "tasks.yaml"
+
+
+@dataclass
+class EmailAuto:
+    config_path: Path = DEFAULT_CONFIG_PATH
+    env_path: Path | None = None
+
+    def _resolved_env_path(self) -> Path | None:
+        if self.env_path is not None:
+            return self.env_path
+        return default_env_path(DEFAULT_PROJECT_ROOT)
+
+    def _load_config(self):
+        env_path = self._resolved_env_path()
+        load_dotenv(env_path)
+        return load_app_config(self.config_path, DEFAULT_PROJECT_ROOT)
+
+    def run_once(self, force: bool = False, limit: int | None = None) -> RunArtifacts:
+        config = self._load_config()
+        credentials = load_email_credentials()
+        pipeline = EmailAutomationPipeline(
+            config=config,
+            project_root=DEFAULT_PROJECT_ROOT,
+            credentials=credentials,
         )
+        return pipeline.run_once(force=force, limit=limit)
 
-    @agent
-    def reporting_analyst(self) -> Agent:
-        return Agent(
-            config=self.agents_config['reporting_analyst'], # type: ignore[index]
-            verbose=True
-        )
-
-    # To learn more about structured task outputs,
-    # task dependencies, and task callbacks, check out the documentation:
-    # https://docs.crewai.com/concepts/tasks#overview-of-a-task
-    @task
-    def research_task(self) -> Task:
-        return Task(
-            config=self.tasks_config['research_task'], # type: ignore[index]
-        )
-
-    @task
-    def reporting_task(self) -> Task:
-        return Task(
-            config=self.tasks_config['reporting_task'], # type: ignore[index]
-            output_file='report.md'
-        )
-
-    @crew
-    def crew(self) -> Crew:
-        """Creates the EmailAuto crew"""
-        # To learn how to add knowledge sources to your crew, check out the documentation:
-        # https://docs.crewai.com/concepts/knowledge#what-is-knowledge
-
-        return Crew(
-            agents=self.agents, # Automatically created by the @agent decorator
-            tasks=self.tasks, # Automatically created by the @task decorator
-            process=Process.sequential,
-            verbose=True,
-            # process=Process.hierarchical, # In case you wanna use that instead https://docs.crewai.com/how-to/Hierarchical/
+    def write_launchd_plist(
+        self,
+        output_path: Path | None = None,
+        python_path: Path | None = None,
+        working_dir: Path | None = None,
+        label: str | None = None,
+    ) -> Path:
+        config = self._load_config()
+        env_path = self._resolved_env_path()
+        return write_launch_agent_plist(
+            config=config,
+            config_path=self.config_path,
+            output_path=output_path,
+            python_path=python_path,
+            working_dir=working_dir or DEFAULT_PROJECT_ROOT,
+            env_path=env_path,
+            label=label,
         )

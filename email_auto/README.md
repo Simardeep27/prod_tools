@@ -1,54 +1,79 @@
-# EmailAuto Crew
+# Email Auto
 
-Welcome to the EmailAuto Crew project, powered by [crewAI](https://crewai.com). This template is designed to help you set up a multi-agent AI system with ease, leveraging the powerful and flexible framework provided by crewAI. Our goal is to enable your agents to collaborate effectively on complex tasks, maximizing their collective intelligence and capabilities.
+`email_auto` is a local daily inbox digest pipeline:
 
-## Installation
+1. Fetch recent emails over IMAP.
+2. Classify each message with a local LLM using the prompt rules in `src/email_auto/config/tasks.yaml`.
+3. Write a structured JSON report plus a Markdown digest.
+4. Generate a `launchd` plist so macOS can run it on a schedule.
 
-Ensure you have Python >=3.10 <3.14 installed on your system. This project uses [UV](https://docs.astral.sh/uv/) for dependency management and package handling, offering a seamless setup and execution experience.
+The default runtime is designed for Apple Silicon with `mlx-lm`.
 
-First, if you haven't already, install uv:
+## Setup
 
-```bash
-pip install uv
-```
-
-Next, navigate to your project directory and install the dependencies:
-
-(Optional) Lock the dependencies and install them by using the CLI command:
-```bash
-crewai install
-```
-### Customizing
-
-**Add your `OPENAI_API_KEY` into the `.env` file**
-
-- Modify `src/email_auto/config/agents.yaml` to define your agents
-- Modify `src/email_auto/config/tasks.yaml` to define your tasks
-- Modify `src/email_auto/crew.py` to add your own logic, tools and specific args
-- Modify `src/email_auto/main.py` to add custom inputs for your agents and tasks
-
-## Running the Project
-
-To kickstart your crew of AI agents and begin task execution, run this from the root folder of your project:
+Install the package dependencies:
 
 ```bash
-$ crewai run
+cd email_auto
+uv sync
+uv add mlx-lm
 ```
 
-This command initializes the email_auto Crew, assembling the agents and assigning them tasks as defined in your configuration.
+Create a local env file:
 
-This example, unmodified, will run the create a `report.md` file with the output of a research on LLMs in the root folder.
+```bash
+cp ../.env.example .env
+```
 
-## Understanding Your Crew
+Required env vars:
 
-The email_auto Crew is composed of multiple AI agents, each with unique roles, goals, and tools. These agents collaborate on a series of tasks, defined in `config/tasks.yaml`, leveraging their collective skills to achieve complex objectives. The `config/agents.yaml` file outlines the capabilities and configurations of each agent in your crew.
+```bash
+IMAP_SERVER=imap.gmail.com
+IMAP_PORT=993
+EMAIL_ACCOUNT=you@example.com
+EMAIL_PASSWORD=your-app-password
+```
 
-## Support
+Use an app password for Gmail, not your normal account password.
 
-For support, questions, or feedback regarding the EmailAuto Crew or crewAI.
-- Visit our [documentation](https://docs.crewai.com)
-- Reach out to us through our [GitHub repository](https://github.com/joaomdmoura/crewai)
-- [Join our Discord](https://discord.com/invite/X4JWnZnxPb)
-- [Chat with our docs](https://chatg.pt/DWjSBZn)
+## Config
 
-Let's create wonders together with the power and simplicity of crewAI.
+Edit `src/email_auto/config/tasks.yaml` to control:
+
+- the daily run times
+- mailbox filtering
+- the local model id
+- the classification rules
+- the final Markdown summary instructions
+
+## Run Once
+
+```bash
+cd email_auto
+uv run email_auto run
+```
+
+Outputs are written to:
+
+- `output/categorization_report.json`
+- `output/daily_summary.md`
+- `output/runs/<timestamp>/...`
+- `state/runtime_state.json`
+
+## Schedule on macOS
+
+Generate a plist from the schedule in `tasks.yaml`:
+
+```bash
+cd email_auto
+uv run email_auto write-launchd --output ~/Library/LaunchAgents/com.prodtools.email-auto.plist
+```
+
+Load it with:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.prodtools.email-auto.plist 2>/dev/null || true
+launchctl load ~/Library/LaunchAgents/com.prodtools.email-auto.plist
+```
+
+The job runs at the `schedule.times` values in `tasks.yaml` and writes logs into `logs/`.

@@ -1,0 +1,13 @@
+[project]
+name = "prod-tools"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "faster-whisper>=1.2.1",
+    "mlx-lm>=0.31.1",
+    "openai-whisper>=20250625",
+    "pydantic>=2.12.5",
+    "sounddevice>=0.5.3",
+]
